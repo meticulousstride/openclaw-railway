@@ -236,18 +236,13 @@ ENV NODE_ENV=production
 # This reduces the attack surface by preventing container escape via root privileges
 USER node
 
-# Start gateway server with default config.
-# Binds to loopback (127.0.0.1) by default for security.
-#
-# IMPORTANT: With Docker bridge networking (-p 18789:18789), loopback bind
-# makes the gateway unreachable from the host. Either:
-#   - Use --network host, OR
-#   - Override --bind to "lan" (0.0.0.0) and set auth credentials
+# Start gateway server.
+# Binds to 0.0.0.0 (lan) so Railway/Render/Heroku ingress can reach it.
+# Port is picked up from the PORT env var (set by PaaS platforms) or defaults to 18789.
 #
 # Built-in probe endpoints for container health checks:
 #   - GET /healthz (liveness) and GET /readyz (readiness)
 #   - aliases: /health and /ready
-# For external access from host/ingress, override bind to "lan" and set auth.
 HEALTHCHECK --interval=3m --timeout=10s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
+  CMD node -e "const p=process.env.PORT||18789;fetch('http://127.0.0.1:'+p+'/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "openclaw.mjs", "gateway", "--bind", "lan", "--allow-unconfigured"]

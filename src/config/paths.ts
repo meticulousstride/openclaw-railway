@@ -255,9 +255,18 @@ export function resolveGatewayPort(
   cfg?: OpenClawConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): number {
+  // OpenClaw-specific env vars take highest priority.
   const envRaw = env.OPENCLAW_GATEWAY_PORT?.trim() || env.CLAWDBOT_GATEWAY_PORT?.trim();
   if (envRaw) {
     const parsed = Number.parseInt(envRaw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  // Standard PaaS PORT env var (Railway, Render, Heroku, Fly).
+  const paasPort = env.PORT?.trim();
+  if (paasPort) {
+    const parsed = Number.parseInt(paasPort, 10);
     if (Number.isFinite(parsed) && parsed > 0) {
       return parsed;
     }
