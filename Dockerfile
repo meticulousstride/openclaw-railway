@@ -222,6 +222,13 @@ RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw \
 
 ENV NODE_ENV=production
 
+# V8 heap limit: Node auto-detects available memory and caps the heap
+# accordingly, but on PaaS containers (Railway, Render, Fly) the detected
+# limit is often too low for the gateway's startup peak (~500 MB).
+# Default to 768 MB so startup succeeds on 1 GB+ containers.
+# Override via the NODE_OPTIONS env var on your hosting platform.
+ENV OPENCLAW_DEFAULT_MAX_OLD_SPACE_SIZE=768
+
 # Security hardening: Run as non-root user
 # The node:24-bookworm image includes a 'node' user (uid 1000)
 # This reduces the attack surface by preventing container escape via root privileges
@@ -236,4 +243,6 @@ USER node
 #   - aliases: /health and /ready
 HEALTHCHECK --interval=3m --timeout=10s --start-period=15s --retries=3 \
   CMD node -e "const p=process.env.PORT||18789;fetch('http://127.0.0.1:'+p+'/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "openclaw.mjs", "gateway", "--bind", "lan", "--allow-unconfigured"]
+# Apply default heap limit only when NODE_OPTIONS is not already set by the
+# user or hosting platform, so explicit overrides are respected.
+CMD ["sh", "-c", "exec node ${NODE_OPTIONS:---max-old-space-size=${OPENCLAW_DEFAULT_MAX_OLD_SPACE_SIZE:-768}} openclaw.mjs gateway --bind lan --allow-unconfigured"]
