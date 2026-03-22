@@ -222,6 +222,16 @@ RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw \
 
 ENV NODE_ENV=production
 
+# PaaS gateway config: allow host-header origin fallback for the Control UI
+# since Railway/Render/Fly proxy traffic through their own domains.
+# Write config and explicitly set OPENCLAW_CONFIG_PATH so the gateway finds it
+# regardless of HOME resolution.
+RUN mkdir -p /app/.openclaw && \
+    printf '{"gateway":{"controlUi":{"dangerouslyAllowHostHeaderOriginFallback":true}}}\n' \
+      > /app/.openclaw/openclaw.json && \
+    chown -R node:node /app/.openclaw
+ENV OPENCLAW_CONFIG_PATH=/app/.openclaw/openclaw.json
+
 # Security hardening: Run as non-root user
 # The node:24-bookworm image includes a 'node' user (uid 1000)
 # This reduces the attack surface by preventing container escape via root privileges
@@ -236,4 +246,7 @@ USER node
 #   - aliases: /health and /ready
 HEALTHCHECK --interval=3m --timeout=10s --start-period=15s --retries=3 \
   CMD node -e "const p=process.env.PORT||18789;fetch('http://127.0.0.1:'+p+'/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "openclaw.mjs", "gateway", "--bind", "lan", "--allow-unconfigured"]
+# Let Node use all available container memory.  Pass --max-semi-space-size=0
+# to disable V8's conservative auto-detection on PaaS containers, which often
+# caps the heap too low for the gateway's startup peak.
+CMD ["sh", "-c", "exec node --max-old-space-size=4096 openclaw.mjs gateway --bind lan --allow-unconfigured"]
